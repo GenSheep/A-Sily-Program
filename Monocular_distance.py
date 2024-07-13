@@ -1,11 +1,10 @@
-"""单目测距算法
-包括：相机内参数矩阵的标定、单目测距算法"""
+"""相机内参数标定"""
 
 import numpy as np
 import cv2
 import csv
 
-l = 1.0
+l = 17.5
 w = 9
 h = 6
 
