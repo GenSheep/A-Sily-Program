@@ -3,6 +3,7 @@
 
 import numpy as np
 import cv2
+import csv
 
 l = 1.0
 w = 9
@@ -49,4 +50,36 @@ def My_camera(w, h, l, fnames):
         print("failed to get camera_matrix")
         return np.zeros((3, 3)), np.zeros(5)
 
-camera_matrix, dist_coeffs = My_camera(9, 6, 1.0,["E:\\WareHouse\\RoboGame\\Monocular_distance\\ChessBoard.jpg"])
+
+def GetImgs(path):
+    cap = cv2.VideoCapture(0)
+    index = 1
+    while cap.isOpened():
+        ret, frame = cap.read()
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if ret:
+            cv2.imshow("ChessBoard", gray)
+            c = cv2.waitKey(5)
+            if c == 27:
+                break
+            elif c == 32:
+                cv2.imwrite(path+"\\ChessBoard%d.jpg"%index, gray)
+                index += 1
+                print("Get a Picture!")
+    return index
+
+
+def WriteData(camera_matrix, dist_coeffs, path):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        for row in camera_matrix:
+            writer.writerow(row)
+        writer.writerow(dist_coeffs)
+        print("Have Writen Camera Data")
+    return None
+
+
+numChessBoards = GetImgs("E:\\WareHouse\\RoboGame\\Monocular_distance")
+fnames = ["E:\\WareHouse\\RoboGame\\Monocular_distance\\ChessBoard%d.jpg"%index for index in range(1, numChessBoards, 1)]
+camera_matrix, dist_coeffs = My_camera(9, 6, 1.0,fnames)
+WriteData(camera_matrix, dist_coeffs, "E:\\WareHouse\\RoboGame\\Monocular_distance\\CameraData.csv")
