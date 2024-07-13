@@ -4,10 +4,6 @@ import numpy as np
 import cv2
 import csv
 
-l = 17.5
-w = 9
-h = 6
-
 def My_camera(w, h, l, fnames):
     objp = np.zeros((w * h, 3), np.float32)
     objp[:, :2] = np.mgrid[0:w, 0:h].T.reshape(-1, 2)
@@ -80,5 +76,5 @@ def WriteData(camera_matrix, dist_coeffs, path):
 
 numChessBoards = GetImgs("E:\\WareHouse\\RoboGame\\Monocular_distance")
 fnames = ["E:\\WareHouse\\RoboGame\\Monocular_distance\\ChessBoard%d.jpg"%index for index in range(1, numChessBoards, 1)]
-camera_matrix, dist_coeffs = My_camera(9, 6, 1.0,fnames)
+camera_matrix, dist_coeffs = My_camera(9, 6, 17.5,fnames)
 WriteData(camera_matrix, dist_coeffs, "E:\\WareHouse\\RoboGame\\Monocular_distance\\CameraData.csv")
