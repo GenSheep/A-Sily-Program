@@ -1,80 +1,92 @@
-"""原始版单目测距，不考虑相机畸变,最好把相机正对物体"""
+"""单目测距
+利用相机内参数矩阵去畸变，然后单目测距。
+认为看见的方块轮廓面积为一个面面积的两倍"""
 
-import cv2
 import numpy as np
+import cv2
+import math
 
 cap = cv2.VideoCapture(0)  # 视频对象
-high = np.array([35, 255, 255])
-low = np.array([10, 50, 100])  # 颜色识别阈值
-
-def PlayVideo(cap, low, high):
-    while cap.isOpened():
-        ret, frame = cap.read()
-        video = GetMask1(frame, low, high)  # 处理视频
-        GetOutline(video, np.array([5, 50, 100]), np.array([50, 255, 255]))
-        cv2.imshow("video", video)  # 可视化视频
-        # out.write(video)  # 输出视频
-        c = cv2.waitKey(5)
-        if c == 27:
-            break    # 每5毫秒等一次，直到按下Esc键后退出
-    return 0
+fourcc = cv2.VideoWriter.fourcc(*"XVID")  # 编码器
+out = cv2.VideoWriter("C:\\Users\\yb028028\\Desktop\\my_video.avi", fourcc, 30.00, (640, 480))  # 视频输出对象
+high = np.array([32, 255, 255])
+low = np.array([3, 72, 80])  # 颜色识别阈值
+L = 1.55
+S = L*L*2  # 1.5个面的面积，单位平方厘米
 
 
-def GetMask1(img, low, high):
+class CamSet(object):
+    def __init__(self):
+        self.CameraMatrix = np.array([[543.2352805344083, 0.0, 335.6325913504112],
+                                      [0, 540.0090338378359, 237.52912533756933],
+                                      [0, 0, 1]])
+        self.DistCoeffs = np.array([-0.041107079237683884, 0.09952660331229725,
+                                    -0.002757530806781375, 0.0024557170640417568,
+                                    0.1088243671433803])
+
+    def CorrectImage(self, img):
+        h, w = img.shape[:2]
+        newCameraMatrix, roi = cv2.getOptimalNewCameraMatrix(self.CameraMatrix, self.DistCoeffs,(w, h),
+                                                             1, (w, h), 0)
+        # 计算无畸变和修正转换关系
+        mapx, mapy = cv2.initUndistortRectifyMap(self.CameraMatrix, self.DistCoeffs, None, newCameraMatrix, (w, h),
+                                                 cv2.CV_16SC2)
+        # 重映射 输入是矫正后的图像
+        CorrectImg = cv2.remap(img, mapx, mapy, cv2.INTER_LINEAR)
+        return CorrectImg
+
+
+def GetMask(img, low, high):
+    """new_width = 300
+    new_height = 200
+    img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)"""
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     img = cv2.GaussianBlur(img, (5, 5), 0, None)  # 高斯模糊
     h, s, v = cv2.split(img)
     v = cv2.equalizeHist(v)
     hsvimg = cv2.merge((h, s, v))  # 直方图均衡化
     mask = cv2.inRange(hsvimg, low, high)  # 生成掩膜
 
-    kernel = np.ones((3, 3), np.uint8)
+    kernel = np.ones((5, 5), np.uint8)
     mask = cv2.erode(mask, kernel, iterations=1)
-    mask = cv2.dilate(mask, kernel, iterations=3)  # 对掩膜进行腐蚀和膨胀处理
+    mask = cv2.dilate(mask, kernel, iterations=1)  # 对掩膜进行腐蚀和膨胀处理
 
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours_l = list(contours)
-    new_contours_l = [contour for contour in contours_l if cv2.contourArea(contour) > 500]  # 筛选面积大于500的轮廓
-
-    centers = []
-    apexes = []
-
-    for cnt in new_contours_l:
-        x, y, w, h = cv2.boundingRect(cnt)
-        cx = x + w // 2
-        cy = y + h // 2
-        centers.append((cx, cy))  # 计算轮廓中心
-
-        x1 = cx - w
-        y1 = cy - h
-        w1 = 2 * w
-        h1 = 2 * h
-        apexes.append([x1, y1, w1, h1])  # 计算较大边框
-
-    area = np.zeros_like(img)
-    for i in range(len(apexes)):
-        cv2.rectangle(area, (apexes[i][0], apexes[i][1]), (apexes[i][0] + apexes[i][2], apexes[i][1] + apexes[i][3]),
-                      (255, 255, 255), -1)  # 获得新的区域
-
-    result = cv2.bitwise_and(img, area)
-    return result
+    contours, hierarchy = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contour = list()
+    area = [cv2.contourArea(contours[i]) for i in range(len(contours))]
+    if len(area) > 0:
+        contour.append(contours[area.index(max(area))])
+        img = cv2.drawContours(img, contour, -1, (0, 0, 255), 2)
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+        img = CamSet().CorrectImage(img)
+        return img, max(area)
+    else:
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+        img = CamSet().CorrectImage(img)
+        return img, None
 
 
-def GetOutline(img, low, high):
-    mask = cv2.inRange(img, low, high)  # 生成掩膜
-    print(mask.shape)
-    kernel = np.ones((3, 3), np.uint8)
-    mask = cv2.erode(mask, kernel, iterations=1)
-    mask = cv2.dilate(mask, kernel, iterations=5)  # 对掩膜进行腐蚀和膨胀处理
 
-    for i in [img, mask]:
-        print(i.shape)
-    img = cv2.bitwise_and(img, mask)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-    edges_img = cv2.Canny(gray, 80, 180, apertureSize=3)
-    Lines = cv2.HoughLinesP(edges_img, 1, np.pi/180, 30, 300, 5, 300)
-    print(Lines)
-    return None
+def PlayVideo(cap, low, high):
+    while cap.isOpened():
+        ret, frame = cap.read()
+        video, area = GetMask(frame, low, high)  # 处理视频
+        distance = OneEyeDistance(543.2352805344083, 540.0090338378359, S, area)
+        print("area:", area, "distance:", distance)
+        cv2.imshow("video", video)  # 可视化视频
+        out.write(video)  # 输出视频
+        c = cv2.waitKey(5)
+        if c == 27:
+            break    # 每5毫秒等一次，直到按下Esc键后退出
+    return 0
 
 
+def OneEyeDistance(fx, fy, S1, S2):
+    if S2 is not None:
+        d1 = math.sqrt(fx * fx * S1 / S2)
+        d2 = math.sqrt(fy * fy * S1 / S2)
+        return (d1 + d2) / 2
+    else:
+        return None
 
 PlayVideo(cap, low, high)
