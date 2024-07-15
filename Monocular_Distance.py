@@ -12,7 +12,7 @@ out = cv2.VideoWriter("C:\\Users\\yb028028\\Desktop\\my_video.avi", fourcc, 30.0
 high = np.array([32, 255, 255])
 low = np.array([3, 72, 80])  # 颜色识别阈值
 L = 1.55
-S = L*L*2  # 1.5个面的面积，单位平方厘米
+S = L*L*1  # 1.5个面的面积，单位平方厘米
 
 
 class CamSet(object):
